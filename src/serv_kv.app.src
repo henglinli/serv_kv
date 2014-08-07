@@ -1,0 +1,16 @@
+{application, serv_kv,
+ [
+  {description, "Serv Key/Value Store"},
+  {vsn, git},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib,
+		  sidejob,
+		  riak_core,
+		  os_mon,
+		  riak_dt
+                 ]},
+  {mod, { serv_kv_app, []}},
+  {env, []}
+ ]}.
