@@ -25,27 +25,16 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-    VMaster = {riak_kv_vnode_master,
+    VMaster = {serv_kv_vnode_master,
                {riak_core_vnode_master, start_link,
-                [riak_kv_vnode, riak_kv_legacy_vnode, riak_kv]},
+                [serv_kv_vnode]},
                permanent, 5000, worker, [riak_core_vnode_master]},
-
-    EntropyManager = {riak_kv_entropy_manager,
-                      {riak_kv_entropy_manager, start_link, []},
-                      permanent, 30000, worker, [riak_kv_entropy_manager]},
-
-    EnsemblesKV =  {riak_kv_ensembles,
-                    {riak_kv_ensembles, start_link, []},
-                    permanent, 30000, worker, [riak_kv_ensembles]},
-
     
     % Figure out which processes we should run...
     HasStorageBackend = (app_helper:get_env(serv_kv, storage_backend) /= undefined),
     %% Build the process list...
     Processes = lists:flatten([
-			       ?IF(HasStorageBackend, VMaster, []),
-			       EntropyManager,
-			       [EnsemblesKV || riak_core_sup:ensembles_enabled()]
+			       ?IF(HasStorageBackend, VMaster, [])
 			      ]),
 
     {ok, { {one_for_one, 5, 10}, Processes} }.

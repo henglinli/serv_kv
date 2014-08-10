@@ -6,10 +6,8 @@
   {applications, [
                   kernel,
                   stdlib,
-		  sidejob,
 		  riak_core,
-		  os_mon,
-		  riak_dt
+		  rafter
                  ]},
   {mod, { serv_kv_app, []}},
   {env, []}

@@ -14,8 +14,7 @@ start(_StartType, _StartArgs) ->
     case serv_kv_sup:start_link() of
 	{ok, Pid} ->
 	    %% ok = riak_core:register(serv_kv, [
-	    %% 				      %%{vnode_module, riak_kv_vnode},
-	    %% 				      {stat_mod, riak_kv_stat}
+	    %% 				      {vnode_module, serv_kv_vnode}
 	    %% 				     ]),
 	    {ok, Pid};
 	Else ->

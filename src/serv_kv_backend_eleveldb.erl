@@ -6,10 +6,15 @@
 %%% @end
 %%% Created : 10 Aug 2014 by HenryLee <lee@OSX.local>
 %%%-------------------------------------------------------------------
--module(serv_kv).
+-module(serv_kv_backend_eleveldb).
+
+-behaviour(rafter_backend).
+
+%% rafter_backend callbacks
+-export([init/1, stop/1, read/2, write/2]).
 
 %% API
--export([get/3, put/4, delete/3]).
+-export([]).
 
 %%%===================================================================
 %%% API
@@ -20,22 +25,31 @@
 %% @spec
 %% @end
 %%--------------------------------------------------------------------
--spec get(Self::atom(), Bucket::binary(), Key::binary()) -> 
-		 {ok, Value::binary()} |
-		 {error, Reason::term()}.
-get(Self, Bucket, Key) ->
-    rafter:read_op(Self, {get, Bucket, Key}).
+-record(state, {peer :: atom() | {atom(), atom()}}).
 
--spec put(Self::atom(), Bucket::binary(), Key::binary(), Value::binary()) -> 
-		 ok | {error, Reason::term()}.
-put(Self, Bucket, Key, Value) ->
-    rafter:op(Self, {put, Bucket, Key, Value}).
+init(Peer) ->
+    #state{peer=Peer}.
 
--spec delete(Self::atom(), Bucket::binary(), Key::binary()) -> 		  
-		    ok | {error, Reason::term()}.
-delete(Self, Bucket, Key) ->
-    rafter:op(Self, {delete, Bucket, Key}).
+stop(State) ->
+    State.
 
+read({get, Bucket, Key}, State) ->
+    Val = {ok, {Bucket, Key}},
+    {Val, State};
+
+read(_, State) ->
+    {{error, read_badarg}, State}.
+
+write({put, Bucket, Key, Value}, State) ->
+    Val = {ok, {Bucket, Key, Value}},
+    {Val, State};
+
+write({delete, Bucket, Key}, State) ->
+    Val = {ok, {Bucket, Key}},
+    {Val, State};
+
+write(_, State) ->
+    {{error, write_badarg}, State}.
 
 %%%===================================================================
 %%% Internal functions
