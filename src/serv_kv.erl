@@ -10,7 +10,7 @@
 
 %% API
 -export([get/3, put/4, delete/3]).
-
+-export([ping/0]).
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -20,6 +20,13 @@
 %% @spec
 %% @end
 %%--------------------------------------------------------------------
+%% @doc Pings a random vnode to make sure communication is functional
+ping() ->
+    DocIdx = riak_core_util:chash_key({<<"ping">>, term_to_binary(now())}),
+    PrefList = riak_core_apl:get_primary_apl(DocIdx, 1, serv_kv),
+    [{IndexNode, _Type}] = PrefList,
+    riak_core_vnode_master:sync_spawn_command(IndexNode, ping, serv_kv_vnode_master).
+
 -spec get(Self::atom(), Bucket::binary(), Key::binary()) -> 
 		 {ok, Value::binary()} |
 		 {error, Reason::term()}.

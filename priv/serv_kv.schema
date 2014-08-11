@@ -1,0 +1,302 @@
+%%-*- mode: erlang -*-
+%% @doc Specifies the storage engine used for Riak's key-value data
+%% and secondary indexes (if supported).
+{mapping, "storage_backend", "serv_kv.storage_backend", [
+  {default, leveldb},
+  {datatype, {enum, [leveldb, memory]}}
+]}.
+
+{translation,
+ "serv_kv.storage_backend",
+ fun(Conf) ->
+    Setting = cuttlefish:conf_get("storage_backend", Conf),
+    case Setting of
+      leveldb -> serv_kv_backend_eleveldb;
+      memory -> rafter_backend_ets;
+      _Default -> riak_kv_bitcask_backend
+    end
+ end}.
+
+%% @doc The directory where rafter log and meta are stored.
+{mapping, "serv_kv.log_dir", "serv_kv.log_dir", [
+  {default, "$(platform_data_dir)"},
+  hidden,
+  {datatype, directory}
+]}.
+
+%% @doc Controls the size of the metadata cache for each vnode. Set to
+%% 'off' to disable the cache.  This shouldn't be necessary on-disk
+%% based backends, but can help performance in some cases (i.e. memory
+%% backend, data fits in block cache, etc). Note that this is the size
+%% of the ETS table, rather than the actual data, to keep the size
+%% calculation simple, thus more space may be used than the simple
+%% size * vnode_count calculation would imply.
+%%
+%% Caution: Do not use without extensive benchmarking.
+{mapping, "metadata_cache_size", "riak_kv.vnode_md_cache_size", [
+  {datatype, [{atom, off}, bytesize]},
+  {default, off}, %% disabled by default, 256KB is a reasonable value
+  hidden
+]}.
+
+{ translation,
+  "riak_kv.vnode_md_cache_size",
+  fun(Conf) ->
+    case cuttlefish:conf_get("metadata_cache_size", Conf) of
+        off -> 0;
+        Size -> Size
+    end
+  end
+}.
+
+%%%% Memory backend section
+%% @doc The maximum amount of memory consumed per vnode by the memory
+%% storage backend.  Minimum: 1MB
+{mapping, "memory_backend.max_memory_per_vnode", "riak_kv.memory_backend.max_memory", [
+  {datatype, bytesize},
+  hidden
+]}.
+
+%% @see memory_backend.max_memory
+{mapping, "multi_backend.$name.memory_backend.max_memory_per_vnode", "riak_kv.multi_backend", [
+  {datatype, bytesize},
+  hidden
+]}.
+
+{translation,
+ "riak_kv.memory_backend.max_memory",
+ fun(Conf) ->
+  Bytes = cuttlefish:conf_get("memory_backend.max_memory_per_vnode", Conf),
+  cuttlefish_util:ceiling(Bytes / 1048576)
+ end
+}.
+
+%% @doc Each value written will be written with this "time to
+%% live". Once that object's time is up, it will be deleted on the
+%% next read of its key. Minimum: 1s
+{mapping, "memory_backend.ttl", "riak_kv.memory_backend.ttl", [
+  {datatype, {duration, s}},
+  hidden
+]}.
+
+%% @see memory_backend.ttl
+{mapping, "multi_backend.$name.memory_backend.ttl", "riak_kv.multi_backend", [
+  {datatype, {duration, s}},
+  hidden
+]}.
+
+%% @doc Reading or writing objects bigger than this size will write a
+%% warning in the logs.
+{mapping, "object.size.warning_threshold", "riak_kv.warn_object_size", [
+  {datatype, bytesize},
+  {default, "5MB"}
+]}.
+
+%% @doc Writing an object bigger than this will send a failure to the
+%% client.
+{mapping, "object.size.maximum", "riak_kv.max_object_size", [
+  {datatype, bytesize},
+  {default, "50MB"}
+]}.
+
+%% @doc Writing an object with more than this number of siblings will
+%% generate a warning in the logs.
+{mapping, "object.siblings.warning_threshold", "riak_kv.warn_siblings", [
+  {datatype, integer},
+  {default, 25}
+]}.
+
+%% @doc Writing an object with more than this number of siblings will
+%% send a failure to the client.
+{mapping, "object.siblings.maximum", "riak_kv.max_siblings", [
+  {datatype, integer},
+  {default, 100}
+]}.
+
+%% @doc The strategy used when merging objects that potentially have
+%% conflicts.
+%%
+%% * 2: Riak 2.0 typed bucket default - reduces sibling creation through additional
+%%      metadata on each sibling (also known as dotted version vectors)
+%% * 1: Riak 1.4, default buckets, and earlier default - may duplicate siblings
+%%      from interleaved writes (sibling explosion.)
+{mapping, "buckets.default.merge_strategy", "riak_core.default_bucket_props.dvv_enabled", [
+  {default, '1'},
+  {datatype, {flag, '2', '1'}},
+  hidden
+]}.
+
+%% @doc The number of primary replicas (non-fallback) that must reply
+%% to a read request.
+{mapping, "buckets.default.pr", "riak_core.default_bucket_props.pr", [
+  {datatype, [integer, {enum, [quorum, all]}]},
+  {default, 0},
+  hidden
+]}.
+
+%% @doc The number of replicas which must reply to a read request.
+{mapping, "buckets.default.r", "riak_core.default_bucket_props.r", [
+  {datatype, [{enum, [quorum, all]}, integer]},
+  {default, quorum},
+  hidden
+]}.
+
+%% @doc The number of replicas which must reply to a write request,
+%% indicating that the write was received.
+{mapping, "buckets.default.w", "riak_core.default_bucket_props.w", [
+  {datatype, [{enum, [quorum, all]}, integer]},
+  {default, quorum},
+  hidden
+]}.
+
+%% @doc The number of primary replicas (non-fallback) which must reply
+%% to a write request.
+{mapping, "buckets.default.pw", "riak_core.default_bucket_props.pw", [
+  {datatype, [integer, {enum, [quorum, all]}]},
+  {default, 0},
+  hidden
+]}.
+
+%% @doc The number of replicas which must reply to a write request,
+%% indicating that the write was committed to durable storage.
+{mapping, "buckets.default.dw", "riak_core.default_bucket_props.dw", [
+  {datatype, [{enum, [quorum, all]}, integer]},
+  {default, quorum},
+  hidden
+]}.
+
+%% @doc The number of replicas which must reply to a delete request.
+{mapping, "buckets.default.rw", "riak_core.default_bucket_props.rw", [
+  {datatype, [{enum, [quorum, all]}, integer]},
+  {default, quorum},
+  hidden
+]}.
+
+%% @doc Whether not-founds will count toward a quorum of reads.
+{mapping,
+ "buckets.default.notfound_ok",
+ "riak_core.default_bucket_props.notfound_ok", [
+  {default, true},
+  {datatype, {enum, [true, false]}},
+  hidden
+]}.
+
+%% @doc Whether not-founds will invoke the "basic quorum"
+%% optimization. This setting will short-circuit fetches where the
+%% majority of replicas report that the key is not found. Only used
+%% when notfound_ok = false.
+{mapping,
+ "buckets.default.basic_quorum",
+ "riak_core.default_bucket_props.basic_quorum", [
+ {default, false},
+ {datatype, {enum, [true, false]}},
+ hidden
+]}.
+
+%% @doc Whether or not siblings are allowed, by default, for untyped buckets.
+%% Note: See Vector Clocks for a discussion of sibling resolution.
+{mapping, "buckets.default.allow_mult", "riak_core.default_bucket_props.allow_mult", [
+  {datatype, {enum, [true, false]}},
+  {default, false},
+  hidden
+]}.
+
+%% @doc Whether conflicting writes resolve via timestamp.
+{mapping,
+  "buckets.default.last_write_wins",
+  "riak_core.default_bucket_props.last_write_wins", [
+  {datatype, {enum, [true, false]}},
+  {default, false},
+  hidden
+]}.
+
+%% @doc A space delimited list of functions that will be run before a
+%% value is stored, and that can abort the write. For Erlang
+%% functions, use "module:function" and for JavaScript, use
+%% "functionName".
+{mapping, "buckets.default.precommit", "riak_core.default_bucket_props.precommit", [
+  hidden
+]}.
+
+{translation, "riak_core.default_bucket_props.precommit",
+ fun(Conf) ->
+  RawString = cuttlefish:conf_get("buckets.default.precommit", Conf, []),
+  StringList = string:tokens(RawString, " "),
+  [ begin
+    case string:tokens(String, ":") of
+        %% Javascript make this:  {struct, [{<<"name">>, <<"SomeJS.nonsense">>}]}
+        [JavascriptFunction] ->
+            {struct, [{<<"name">>, list_to_binary(JavascriptFunction)}]};
+        %% Erlang make this: {struct, [{<<"mod">>, <<"module">>}, {<<"fun">>,<<"function">>}]}
+        [Module, Function] ->
+            {struct, [
+                      {<<"mod">>, list_to_binary(Module)},
+                      {<<"fun">>, list_to_binary(Function)}
+                     ]};
+        _ -> cuttlefish:invalid("incorrect hook format '" ++ String ++ "'")
+    end
+  end || String <- StringList]
+ end
+}.
+
+%% @doc A space delimited list of functions that will be run after a
+%% value is stored. Only Erlang functions are allowed, using the
+%% "module:function" format.
+{mapping, "buckets.default.postcommit", "riak_core.default_bucket_props.postcommit", [
+  hidden
+]}.
+
+{translation, "riak_core.default_bucket_props.postcommit",
+ fun(Conf) ->
+   RawString = cuttlefish:conf_get("buckets.default.postcommit", Conf, []),
+   StringList = string:tokens(RawString, " "),
+   [ begin
+     case string:tokens(String, ":") of
+         [Module, Function] ->
+             {struct, [
+                       {<<"mod">>, list_to_binary(Module)},
+                       {<<"fun">>, list_to_binary(Function)}
+                      ]};
+         _ -> cuttlefish:invalid("incorrect hook format '" ++ String ++ "'")
+     end
+   end ||  String <- StringList]
+ end
+}.
+
+%% @doc Whether serialized datatypes will use compression, and at what
+%% level. When an integer, this refers to the aggressiveness (and
+%% slowness) of compression, on a scale from 0 to 9. 'on' is
+%% equivalent to 6, 'off' is equivalent to 0.
+{mapping, "datatypes.compression_level", "riak_dt.binary_compression", [
+    {datatype, [integer, flag]},
+    {default, 1},
+    {validators, ["is_compression_value"]},
+    hidden
+]}.
+
+{validator, "is_compression_value", "must be on/off or a value between 0 and 9",
+ fun(Value)->
+    is_boolean(Value) orelse (is_integer(Value) andalso Value =< 9 andalso Value >= 0)
+ end}.
+
+%% @doc Whether to use the background manager to limit KV handoff.
+%% This will help to prevent system response degradation under times
+%% of heavy load from multiple background tasks that contend for the
+%% same resources.
+%% @see background_manager
+{mapping, "handoff.use_background_manager", "riak_kv.handoff_use_background_manager", [
+    {datatype, flag},
+    {default, off},
+    hidden
+]}.
+
+%% @doc Whether to use the background manager to limit AAE tree
+%% rebuilds. This will help to prevent system response degradation
+%% under times of heavy load from multiple background tasks that
+%% contend for the same resources.
+%% @see background_manager
+{mapping, "anti_entropy.use_background_manager", "riak_kv.aae_use_background_manager", [
+    {datatype, flag},
+    {default, off},
+    hidden
+]}.
