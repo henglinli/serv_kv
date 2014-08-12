@@ -18,8 +18,8 @@
  end}.
 
 %% @doc The directory where rafter log and meta are stored.
-{mapping, "serv_kv.log_dir", "serv_kv.log_dir", [
-  {default, "$(platform_data_dir)"},
+{mapping, "rafter_root", "serv_kv.rafter_root", [
+  {default, "$(platform_data_dir)/rafter"},
   hidden,
   {datatype, directory}
 ]}.

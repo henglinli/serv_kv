@@ -25,30 +25,62 @@
 %% @spec
 %% @end
 %%--------------------------------------------------------------------
--record(state, {peer :: atom() | {atom(), atom()}}).
-
+-record(state, {peer :: atom() | {atom(), atom()},
+		db :: eleveldb:db_ref()
+	       }).
+%% init
+-spec init(Args :: term()) ->
+    {ok, State :: term()} | {error, Reason :: term()}.
 init(Peer) ->
-    #state{peer=Peer}.
+    LogDir = app_helper:get_env(serv_kv, rafter_root, "rafter"),
+    filelib:ensure_dir(LogDir),
+    DataFile = filename:join(LogDir, "leveldb"),
+    case eleveldb:open(DataFile, [{create_if_missing, true}]) of
+	{ok, Db} ->
+	    {ok, #state{peer=Peer, db=Db}};
+	{error, Reason} ->
+	    lager:error("open db error: ~", [Reason]),
+	    {error, Reason}
+    end.
 
-stop(State) ->
-    State.
+%% stop backend
+-spec stop(State :: term()) ->
+    ok | {error, Reason :: term()}.
+stop(#state{db=Db}) ->
+    eleveldb:close(Db).
 
-read({get, Bucket, Key}, State) ->
-    Val = {ok, {Bucket, Key}},
-    {Val, State};
-
-read(_, State) ->
+%% read op
+-spec read(Operation :: term(), State :: term()) ->
+    {Value :: term(), State :: term()}.
+read({get, Key}, #state{db=Db}=State) when erlang:is_binary(Key) ->
+    case eleveldb:get(Db, Key, []) of
+	{ok, Value} ->
+	    {{ok, Value}, State};
+	not_found ->
+	    {{error, not_found}, State};
+	{error, Reason} ->
+	    {{error, Reason}, State}
+    end;
+read(_BadOperation, State) ->
     {{error, read_badarg}, State}.
 
-write({put, Bucket, Key, Value}, State) ->
-    Val = {ok, {Bucket, Key, Value}},
-    {Val, State};
+%% write op
+-spec write(Operation :: term(), State :: term()) ->
+    {Value :: term(), State :: term()}.
 
-write({delete, Bucket, Key}, State) ->
-    Val = {ok, {Bucket, Key}},
-    {Val, State};
+% put
+write({put, Key, Value}=Update, #state{db=Db}=State)
+  when erlang:is_binary(Key) andalso erlang:is_binary(Value) ->
+    Result = eleveldb:write(Db, [Update], []),
+    {Result, State};
 
-write(_, State) ->
+% delete
+write({delete, Key}=Update, #state{db=Db}=State)
+  when erlang:is_binary(Key) ->
+    Result = eleveldb:write(Db, [Update], []),
+    {Result, State};
+
+write(_BadOperation, State) ->
     {{error, write_badarg}, State}.
 
 %%%===================================================================

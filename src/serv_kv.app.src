@@ -6,8 +6,7 @@
   {applications, [
                   kernel,
                   stdlib,
-		  riak_core,
-		  rafter
+		  riak_core
                  ]},
   {mod, { serv_kv_app, []}},
   {env, []}
