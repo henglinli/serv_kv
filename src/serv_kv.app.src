@@ -3,10 +3,11 @@
   {description, "Serv Key/Value Store"},
   {vsn, git},
   {registered, []},
+  {included_applications, [rafter]},
   {applications, [
                   kernel,
                   stdlib,
-		  riak_core
+		  lager
                  ]},
   {mod, { serv_kv_app, []}},
   {env, []}
